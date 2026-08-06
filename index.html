@@ -1,23 +1,1156 @@
+
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
-<meta charset="UTF-8">
-<title>FlowBreak — Privacy Policy</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Web Serial Console</title>
 <style>
-  body { font-family: sans-serif; max-width: 700px; margin: 60px auto; padding: 0 20px; line-height: 1.7; color: #222; }
-  h1 { font-size: 24px; } h2 { font-size: 18px; margin-top: 32px; }
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --border:#2b3140;
+    --fg:#d7dce5; --muted:#8b93a7; --accent:#4c8dff; --ok:#3ecf8e; --err:#ff5f56; --warn:#ffbd2e;
+    --term-bg:#0b0d12; --term-fg:#d7dce5;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--fg);
+    font:13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    display:flex; flex-direction:column; overflow:hidden;
+  }
+  button, select, input{font-family:inherit; font-size:12px; color:var(--fg)}
+  button{
+    background:var(--panel2); border:1px solid var(--border); border-radius:6px;
+    padding:5px 10px; cursor:pointer; white-space:nowrap;
+  }
+  button:hover:not(:disabled){background:#272c38; border-color:#3a4152}
+  button:disabled{opacity:.4; cursor:not-allowed}
+  button.primary{background:var(--accent); border-color:var(--accent); color:#fff}
+  button.primary:hover:not(:disabled){background:#3c7cf0}
+  button.danger{background:#3a2226; border-color:#5b2f34; color:#ff9a94}
+  button.danger:hover:not(:disabled){background:#4a2a2f}
+  button.tgl[aria-pressed="true"]{background:#20344f; border-color:var(--accent); color:#cfe0ff}
+  select,input[type=text],input[type=number]{
+    background:var(--panel2); border:1px solid var(--border); border-radius:6px; padding:5px 7px;
+  }
+  input:focus,select:focus,button:focus-visible{outline:2px solid var(--accent); outline-offset:-1px}
+  label.f{display:inline-flex; align-items:center; gap:5px; color:var(--muted)}
+  label.f > span{font-size:11px; text-transform:uppercase; letter-spacing:.4px}
+  .bar{
+    display:flex; flex-wrap:wrap; align-items:center; gap:8px;
+    padding:8px 10px; background:var(--panel); border-bottom:1px solid var(--border);
+  }
+  .sep{width:1px; height:22px; background:var(--border); margin:0 2px}
+  .spacer{flex:1}
+  .dot{width:9px; height:9px; border-radius:50%; background:#555; box-shadow:0 0 0 3px rgba(255,255,255,.03)}
+  .dot.on{background:var(--ok); box-shadow:0 0 8px var(--ok)}
+  .dot.busy{background:var(--warn)}
+  #status{color:var(--muted); font-size:12px}
+  #main{flex:1; display:flex; min-height:0}
+  #termWrap{flex:1; min-width:0; position:relative; display:flex; flex-direction:column}
+  #term{
+    flex:1; overflow:auto; background:var(--term-bg); color:var(--term-fg);
+    font-family:var(--mono); font-size:12.5px; line-height:1.35;
+    padding:8px 10px 40px; white-space:pre-wrap; word-break:break-all;
+    -webkit-user-select:text; user-select:text;
+  }
+  #term:focus{outline:none}
+  #term.raw{box-shadow:inset 0 0 0 1px var(--accent)}
+  #term .l{min-height:1.35em}
+  #term .ts{color:#5a6070}
+  #term .tx{color:#8fbf6f}
+  #term .sys{color:#7a8296; font-style:italic}
+  #term .err{color:var(--err)}
+  #term .cur{background:#d7dce5; color:#0b0d12}
+  #rawBadge{
+    position:absolute; right:14px; bottom:8px; z-index:5; opacity:.85;
+    background:rgba(76,141,255,.15); border:1px solid var(--accent); color:#cfe0ff;
+    padding:2px 8px; border-radius:20px; font-size:11px; pointer-events:none; display:none;
+  }
+  #term.raw ~ #rawBadge{display:block}
+  #side{
+    width:250px; flex-shrink:0; background:var(--panel); border-left:1px solid var(--border);
+    display:flex; flex-direction:column; overflow:auto;
+  }
+  #side.hidden{display:none}
+  .sect{padding:9px 10px; border-bottom:1px solid var(--border)}
+  .sect h3{margin:0 0 7px; font-size:11px; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); font-weight:600}
+  .keys{display:flex; flex-wrap:wrap; gap:5px}
+  .keys button{padding:4px 8px; font-family:var(--mono); font-size:11px}
+  .macro{display:flex; gap:4px; margin-bottom:4px}
+  .macro button.m{flex:1; text-align:left; overflow:hidden; text-overflow:ellipsis; font-family:var(--mono); font-size:11px}
+  .macro button.x{padding:4px 7px; color:var(--muted)}
+  .sig{display:grid; grid-template-columns:repeat(4,1fr); gap:5px; text-align:center; font-size:10px; color:var(--muted)}
+  .sig div b{display:block; font-size:11px; padding:3px 0; border:1px solid var(--border); border-radius:4px; background:var(--panel2); color:#666}
+  .sig div b.on{background:#1c3a2c; border-color:var(--ok); color:var(--ok)}
+  #cmdbar{
+    display:flex; gap:8px; align-items:center; padding:8px 10px;
+    background:var(--panel); border-top:1px solid var(--border);
+  }
+  #cmd{flex:1; font-family:var(--mono); font-size:12.5px; padding:7px 9px}
+  #stats{padding:4px 10px; background:var(--panel); border-top:1px solid var(--border);
+         color:var(--muted); font-size:11px; font-family:var(--mono); display:flex; gap:14px; flex-wrap:wrap}
+  #unsupported{padding:40px; max-width:640px; margin:0 auto; line-height:1.7}
+  #unsupported code{background:var(--panel2); padding:2px 6px; border-radius:4px; font-family:var(--mono)}
+  .hint{color:var(--muted); font-size:11px}
+  dialog{background:var(--panel); color:var(--fg); border:1px solid var(--border); border-radius:10px; padding:16px; min-width:340px}
+  dialog::backdrop{background:rgba(0,0,0,.55)}
+  dialog h3{margin:0 0 12px; font-size:14px}
+  dialog .row{display:flex; flex-direction:column; gap:4px; margin-bottom:10px}
+  dialog input{width:100%}
+  .grow{flex:1}
 </style>
 </head>
 <body>
-<h1>FlowBreak — Privacy Policy</h1>
-<p>Last updated: March 2026</p>
-<h2>Data Collection</h2>
-<p>FlowBreak does not collect, store, transmit, or share any personal data, browsing history, or information about the websites you visit.</p>
-<h2>Local Storage</h2>
-<p>All data saved by the extension (timer settings and rest time statistics) is stored exclusively on your local device using chrome.storage.local and never leaves your device.</p>
-<h2>Third-party Services</h2>
-<p>The extension does not use analytics, advertising networks, or any third-party services. No network requests are made to external servers.</p>
-<h2>Contact</h2>
-<p>Questions: callmedavron@gmail.com</p>
+
+<div class="bar">
+  <span class="dot" id="dot"></span>
+  <button id="btnConnect" class="primary">Подключить</button>
+  <button id="btnDisconnect" disabled>Отключить</button>
+  <select id="ports" title="Ранее разрешённые порты"></select>
+
+  <span class="sep"></span>
+
+  <label class="f"><span>Baud</span>
+    <select id="baud">
+      <option>300</option><option>1200</option><option>2400</option><option>4800</option>
+      <option>9600</option><option>19200</option><option>38400</option><option>57600</option>
+      <option selected>115200</option><option>230400</option><option>460800</option>
+      <option>500000</option><option>921600</option><option>1000000</option>
+      <option>1500000</option><option>2000000</option><option>3000000</option>
+      <option value="custom">свой…</option>
+    </select>
+  </label>
+  <input type="number" id="baudCustom" style="width:90px; display:none" value="115200" min="1">
+
+  <label class="f"><span>Data</span>
+    <select id="dataBits"><option>7</option><option selected>8</option></select>
+  </label>
+  <label class="f"><span>Parity</span>
+    <select id="parity"><option value="none" selected>none</option><option value="even">even</option><option value="odd">odd</option></select>
+  </label>
+  <label class="f"><span>Stop</span>
+    <select id="stopBits"><option selected>1</option><option>2</option></select>
+  </label>
+  <label class="f"><span>Flow</span>
+    <select id="flow"><option value="none" selected>none</option><option value="hardware">RTS/CTS</option></select>
+  </label>
+  <button id="btnApply" disabled title="Переоткрыть порт с новыми настройками">Применить</button>
+
+  <span class="spacer"></span>
+  <span id="status">не подключено</span>
+</div>
+
+<div class="bar">
+  <button id="btnRaw" class="tgl" aria-pressed="false" title="Клавиатура шлётся напрямую в порт (Ctrl+C, Tab, стрелки). Клик по терминалу = фокус">⌨ Интерактивно</button>
+  <label class="f"><span>Enter</span>
+    <select id="eol">
+      <option value="cr" selected>CR (\r)</option>
+      <option value="lf">LF (\n)</option>
+      <option value="crlf">CRLF</option>
+      <option value="none">ничего</option>
+    </select>
+  </label>
+  <label class="f"><span>Backspace</span>
+    <select id="bs"><option value="127" selected>DEL 0x7F</option><option value="8">BS 0x08</option></select>
+  </label>
+
+  <span class="sep"></span>
+
+  <button id="btnEcho" class="tgl" aria-pressed="false" title="Показывать отправленное в терминале">Эхо</button>
+  <button id="btnTs" class="tgl" aria-pressed="false" title="Метка времени в начале строки">Время</button>
+  <button id="btnHex" class="tgl" aria-pressed="false" title="Показывать входящие данные как hex-дамп">HEX</button>
+  <button id="btnScroll" class="tgl" aria-pressed="true" title="Автопрокрутка вниз">↓ Автоскролл</button>
+  <button id="btnWrap" class="tgl" aria-pressed="true" title="Перенос длинных строк">Перенос</button>
+
+  <span class="sep"></span>
+  <button id="btnDtr" class="tgl" aria-pressed="true" disabled title="Data Terminal Ready">DTR</button>
+  <button id="btnRts" class="tgl" aria-pressed="true" disabled title="Request To Send">RTS</button>
+  <button id="btnBreak" disabled title="Послать BREAK (250 мс)">BREAK</button>
+
+  <span class="spacer"></span>
+  <button id="btnFile" disabled title="Отправить текстовый файл построчно">Файл…</button>
+  <button id="btnSave" title="Сохранить весь лог в файл">Сохранить лог</button>
+  <button id="btnClear" title="Очистить экран (Ctrl+L)">Очистить</button>
+  <button id="btnSide" class="tgl" aria-pressed="true">Панель</button>
+</div>
+
+<div id="main">
+  <div id="termWrap">
+    <div id="term" tabindex="0"></div>
+    <div id="rawBadge">интерактивный режим — клавиши идут в порт</div>
+  </div>
+
+  <div id="side">
+    <div class="sect">
+      <h3>Быстрые клавиши</h3>
+      <div class="keys">
+        <button data-b="3">Ctrl+C</button>
+        <button data-b="4">Ctrl+D</button>
+        <button data-b="26">Ctrl+Z</button>
+        <button data-b="27">ESC</button>
+        <button data-b="9">Tab</button>
+        <button data-b="12">Ctrl+L</button>
+        <button data-b="21">Ctrl+U</button>
+        <button data-enter="1">Enter</button>
+        <button data-s="&#27;[A">↑</button>
+        <button data-s="&#27;[B">↓</button>
+        <button data-b="32">Space</button>
+      </div>
+    </div>
+
+    <div class="sect">
+      <h3>Прерывание автозагрузки</h3>
+      <div class="keys">
+        <button id="btnSpam" title="Спамит выбранным символом — прерывает autoboot в U-Boot/LK">Спамить 3 сек</button>
+        <select id="spamKey" style="width:100%; margin-top:5px">
+          <option value="32">Space</option>
+          <option value="27" selected>ESC</option>
+          <option value="13">Enter</option>
+          <option value="99">c</option>
+          <option value="3">Ctrl+C</option>
+        </select>
+      </div>
+      <div class="hint" style="margin-top:6px">Нажми и сразу подай питание/ресет.</div>
+    </div>
+
+    <div class="sect">
+      <h3>Линии</h3>
+      <div class="sig">
+        <div>CTS<b id="sCTS">–</b></div>
+        <div>DSR<b id="sDSR">–</b></div>
+        <div>DCD<b id="sDCD">–</b></div>
+        <div>RI<b id="sRI">–</b></div>
+      </div>
+    </div>
+
+    <div class="sect grow">
+      <h3>Макросы <button id="btnAddMacro" style="float:right; padding:2px 7px">+</button></h3>
+      <div id="macros"></div>
+      <div class="hint" id="macroHint">Сохранённые команды. Alt+1…9 — быстрый запуск.</div>
+    </div>
+
+    <div class="sect">
+      <h3>Буфер</h3>
+      <label class="f"><span>строк</span>
+        <input type="number" id="maxLines" value="8000" min="200" max="200000" step="500" style="width:90px">
+      </label>
+      <div class="hint" style="margin-top:6px">Шрифт:
+        <button id="fontDn" style="padding:1px 7px">−</button>
+        <button id="fontUp" style="padding:1px 7px">+</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="cmdbar">
+  <input type="text" id="cmd" placeholder="Команда — Enter отправить, ↑/↓ история, Ctrl+Enter без перевода строки" autocomplete="off" spellcheck="false">
+  <label class="f"><input type="checkbox" id="hexSend"><span>hex</span></label>
+  <button id="btnSend" class="primary" disabled>Отправить</button>
+</div>
+
+<div id="stats">
+  <span id="stPort">порт: —</span>
+  <span id="stRx">RX: 0 B</span>
+  <span id="stTx">TX: 0 B</span>
+  <span id="stLines">строк: 0</span>
+</div>
+
+<input type="file" id="fileInput" hidden>
+
+<dialog id="dlgMacro">
+  <h3>Макрос</h3>
+  <form method="dialog">
+    <div class="row"><label class="f"><span>Название</span></label><input type="text" id="mName" placeholder="reboot bootloader"></div>
+    <div class="row"><label class="f"><span>Команда</span></label><input type="text" id="mCmd" placeholder="reboot bootloader"></div>
+    <div class="row"><label class="f"><input type="checkbox" id="mEol" checked><span>добавлять перевод строки</span></label></div>
+    <div style="display:flex; gap:8px; justify-content:flex-end">
+      <button value="cancel">Отмена</button>
+      <button value="ok" class="primary">Сохранить</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlgFile">
+  <h3>Отправка файла построчно</h3>
+  <form method="dialog">
+    <div class="row"><span class="hint" id="fName">—</span></div>
+    <div class="row"><label class="f"><span>Задержка между строками, мс</span></label><input type="number" id="fDelay" value="50" min="0" max="5000"></div>
+    <div style="display:flex; gap:8px; justify-content:flex-end">
+      <button value="cancel">Отмена</button>
+      <button value="ok" class="primary">Отправить</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+"use strict";
+
+/* ------------------------------------------------------------------ *
+ *  Web Serial Console — одностраничное приложение без зависимостей.
+ *  Терминал: собственный парсер ANSI (SGR + базовые CSI), модель
+ *  "строка = массив ячеек", что корректно отрабатывает \r, \b и
+ *  редактирование строки в shell-е устройства.
+ * ------------------------------------------------------------------ */
+
+const $ = id => document.getElementById(id);
+const LS = 'wsc.';
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem(LS+k); return v===null ? d : JSON.parse(v); }catch{ return d; } },
+  set(k, v){ try{ localStorage.setItem(LS+k, JSON.stringify(v)); }catch{} }
+};
+
+if (!('serial' in navigator)) {
+  document.body.innerHTML =
+    '<div id="unsupported"><h2>Web Serial API недоступен</h2>' +
+    '<p>Нужен Chrome, Edge или Opera (desktop), версия 89+. В Safari и Firefox Web Serial не поддерживается.</p>' +
+    '<p>Страницу нужно открывать по <code>https://</code> или с <code>http://localhost</code> — из <code>file://</code> API отключён. ' +
+    'Быстрый запуск из папки с этим файлом:</p>' +
+    '<p><code>python3 -m http.server 8000</code> → откройте <code>http://localhost:8000/</code></p></div>';
+  throw new Error('no Web Serial');
+}
+
+/* ======================= Терминал ======================= */
+
+const DEF_STYLE = { css:'', cls:'' };
+
+const PAL16 = ['#000000','#cd3131','#0dbc79','#e5e510','#2472c8','#bc3fbc','#11a8cd','#d7dce5',
+               '#666666','#f14c4c','#23d18b','#f5f543','#3b8eea','#d670d6','#29b8db','#ffffff'];
+
+function pal256(n){
+  if (n < 16) return PAL16[n];
+  if (n < 232){
+    n -= 16;
+    const lv = [0,95,135,175,215,255];
+    return `rgb(${lv[Math.floor(n/36)%6]},${lv[Math.floor(n/6)%6]},${lv[n%6]})`;
+  }
+  const g = 8 + (n-232)*10;
+  return `rgb(${g},${g},${g})`;
+}
+
+class Term {
+  constructor(el){
+    this.el = el;
+    this.lines = [];            // {cells:[{c,s}], ts, dom, dirty}
+    this.col = 0;
+    this.style = DEF_STYLE;
+    this.sgr = { fg:null, bg:null, bold:false, dim:false, italic:false, underline:false, inverse:false };
+    this.maxLines = store.get('maxLines', 8000);
+    this.timestamps = false;
+    this.autoscroll = true;
+    this.esc = 0;               // 0 обычный, 1 после ESC, 2 CSI, 3 OSC, 4 charset
+    this.buf = '';
+    this.oscBuf = '';
+    this.pending = '';
+    this.raf = 0;
+    this.newLine();
+  }
+
+  /* --- буфер строк --- */
+  newLine(){
+    const dom = document.createElement('div');
+    dom.className = 'l';
+    const line = { cells: [], ts: null, dom, dirty: true, cls: null };
+    this.lines.push(line);
+    this.el.appendChild(dom);
+    this.col = 0;
+    this.cur = line;
+    this.trim();
+    return line;
+  }
+  trim(){
+    const over = this.lines.length - this.maxLines;
+    if (over > 0){
+      for (let i=0;i<over;i++) this.lines[i].dom.remove();
+      this.lines.splice(0, over);
+    }
+  }
+  clear(){
+    this.el.textContent = '';
+    this.lines = [];
+    this.newLine();
+    this.render();
+  }
+
+  /* --- запись --- */
+  cell(i){ return this.cur.cells[i]; }
+  put(ch){
+    const cells = this.cur.cells;
+    if (this.timestamps && this.cur.ts === null) this.cur.ts = tstamp();  // время прихода первого байта строки
+    while (cells.length < this.col) cells.push({c:' ', s:DEF_STYLE});
+    cells[this.col] = { c: ch, s: this.style };
+    this.col++;
+    this.cur.dirty = true;
+  }
+
+  write(text){
+    for (let i=0;i<text.length;i++){
+      const ch = text[i];
+      const code = text.charCodeAt(i);
+
+      if (this.esc === 3){                       // OSC ... BEL | ESC \
+        if (ch === '\x07'){ this.esc = 0; this.oscBuf=''; }
+        else if (ch === '\x1b' && text[i+1] === '\\'){ i++; this.esc = 0; this.oscBuf=''; }
+        else this.oscBuf += ch;
+        continue;
+      }
+      if (this.esc === 4){ this.esc = 0; continue; }   // выбор набора символов — глотаем
+
+      if (this.esc === 2){                       // CSI
+        if (code >= 0x40 && code <= 0x7e){ this.csi(this.buf, ch); this.buf=''; this.esc=0; }
+        else this.buf += ch;
+        continue;
+      }
+      if (this.esc === 1){
+        if (ch === '['){ this.esc = 2; this.buf=''; }
+        else if (ch === ']'){ this.esc = 3; this.oscBuf=''; }
+        else if (ch === '(' || ch === ')' || ch === '*' || ch === '+'){ this.esc = 4; }
+        else if (ch === 'c'){ this.reset(); this.esc = 0; }
+        else if (ch === '7' || ch === '8' || ch === '=' || ch === '>'){ this.esc = 0; }
+        else if (ch === 'M'){ this.esc = 0; }
+        else this.esc = 0;
+        continue;
+      }
+
+      switch (ch){
+        case '\x1b': this.esc = 1; break;
+        case '\n':   this.newLine(); break;
+        case '\r':   this.col = 0; break;
+        case '\b':   if (this.col > 0) this.col--; break;
+        case '\t': { const n = 8 - (this.col % 8); for (let k=0;k<n;k++) this.put(' '); break; }
+        case '\x07': break;                       // bell
+        case '\x00': case '\x0e': case '\x0f': break;
+        default:
+          if (code < 32) break;                   // прочие управляющие — пропускаем
+          this.put(ch);
+      }
+    }
+  }
+
+  csi(params, final){
+    const priv = params.startsWith('?');
+    const raw = priv ? params.slice(1) : params;
+    const p = raw.split(';').map(x => x === '' ? 0 : parseInt(x,10) || 0);
+    const n = p[0] || 0;
+
+    switch (final){
+      case 'm': if (!priv) this.applySGR(raw); break;
+      case 'K': {                                 // очистка в строке
+        const c = this.cur.cells;
+        if (n === 0) c.length = Math.min(c.length, this.col);
+        else if (n === 1) for (let i=0;i<this.col && i<c.length;i++) c[i] = {c:' ', s:DEF_STYLE};
+        else c.length = 0;
+        this.cur.dirty = true; break;
+      }
+      case 'J': {                                 // очистка экрана
+        if (n === 2 || n === 3){ this.clear(); }
+        else { this.cur.cells.length = Math.min(this.cur.cells.length, this.col); this.cur.dirty = true; }
+        break;
+      }
+      case 'H': case 'f': this.col = Math.max(0, (p[1]||1) - 1); this.cur.dirty = true; break;
+      case 'G': case '`': this.col = Math.max(0, n - 1); this.cur.dirty = true; break;
+      case 'C': this.col += Math.max(1, n); this.cur.dirty = true; break;
+      case 'D': this.col = Math.max(0, this.col - Math.max(1, n)); this.cur.dirty = true; break;
+      case 'A': break;                            // вверх — в scrollback-модели игнорируем
+      case 'B': case 'E': for (let i=0;i<Math.max(1,n);i++) this.newLine(); break;
+      case 'P': this.cur.cells.splice(this.col, Math.max(1,n)); this.cur.dirty = true; break;
+      case 'X': {
+        const c = this.cur.cells;
+        for (let i=this.col;i<this.col+Math.max(1,n);i++) c[i] = {c:' ', s:DEF_STYLE};
+        this.cur.dirty = true; break;
+      }
+      case '@': {
+        const add = Array.from({length:Math.max(1,n)}, () => ({c:' ', s:DEF_STYLE}));
+        this.cur.cells.splice(this.col, 0, ...add); this.cur.dirty = true; break;
+      }
+      default: break;                             // h/l/r/n/s/u и прочее — игнор
+    }
+  }
+
+  applySGR(raw){
+    const p = raw === '' ? [0] : raw.split(';').map(x => parseInt(x,10) || 0);
+    const s = this.sgr;
+    for (let i=0;i<p.length;i++){
+      const v = p[i];
+      if (v === 0) Object.assign(s, {fg:null,bg:null,bold:false,dim:false,italic:false,underline:false,inverse:false});
+      else if (v === 1) s.bold = true;
+      else if (v === 2) s.dim = true;
+      else if (v === 3) s.italic = true;
+      else if (v === 4) s.underline = true;
+      else if (v === 7) s.inverse = true;
+      else if (v === 22){ s.bold = false; s.dim = false; }
+      else if (v === 23) s.italic = false;
+      else if (v === 24) s.underline = false;
+      else if (v === 27) s.inverse = false;
+      else if (v >= 30 && v <= 37) s.fg = PAL16[v-30];
+      else if (v === 39) s.fg = null;
+      else if (v >= 40 && v <= 47) s.bg = PAL16[v-40];
+      else if (v === 49) s.bg = null;
+      else if (v >= 90 && v <= 97) s.fg = PAL16[v-90+8];
+      else if (v >= 100 && v <= 107) s.bg = PAL16[v-100+8];
+      else if (v === 38 || v === 48){
+        const target = v === 38 ? 'fg' : 'bg';
+        if (p[i+1] === 5){ s[target] = pal256(p[i+2]|0); i += 2; }
+        else if (p[i+1] === 2){ s[target] = `rgb(${p[i+2]|0},${p[i+3]|0},${p[i+4]|0})`; i += 4; }
+      }
+    }
+    this.style = this.mkStyle(s);
+  }
+
+  mkStyle(s){
+    let fg = s.fg, bg = s.bg;
+    if (s.inverse){ const t = fg || 'var(--term-fg)'; fg = bg || 'var(--term-bg)'; bg = t; }
+    let css = '';
+    if (fg) css += `color:${fg};`;
+    if (bg) css += `background:${bg};`;
+    if (s.bold) css += 'font-weight:600;';
+    if (s.dim) css += 'opacity:.65;';
+    if (s.italic) css += 'font-style:italic;';
+    if (s.underline) css += 'text-decoration:underline;';
+    return css === '' ? DEF_STYLE : { css, cls:'' };
+  }
+
+  reset(){ this.sgr = {fg:null,bg:null,bold:false,dim:false,italic:false,underline:false,inverse:false}; this.style = DEF_STYLE; }
+
+  /* строка целиком одним стилем (эхо, системные сообщения) */
+  writeStyled(text, cls){
+    const st = { css:'', cls };
+    const prev = this.style;
+    this.style = st;
+    this.write(text);
+    this.style = prev;
+  }
+
+  /* --- рендер --- */
+  render(){
+    for (const line of this.lines){
+      if (!line.dirty) continue;
+      line.dom.innerHTML = this.lineHTML(line);
+      line.dirty = false;
+    }
+    if (this.autoscroll) this.el.scrollTop = this.el.scrollHeight;
+    $('stLines').textContent = 'строк: ' + this.lines.length;
+  }
+
+  lineHTML(line){
+    let html = line.ts ? `<span class="ts">${line.ts} </span>` : '';
+    const cells = line.cells;
+    let i = 0;
+    const cursorAt = (line === this.cur && rawMode && document.activeElement === this.el) ? this.col : -1;
+    while (i < cells.length){
+      const s = cells[i].s;
+      let j = i, txt = '';
+      while (j < cells.length && cells[j].s === s && j !== cursorAt){ txt += cells[j].c; j++; }
+      if (j === i){                                    // ячейка под курсором
+        html += `<span class="cur">${esc(cells[i].c)}</span>`;
+        i++;
+        continue;
+      }
+      html += this.span(s, txt);
+      i = j;
+    }
+    if (cursorAt >= cells.length) html += '<span class="cur"> </span>';
+    return html || '&#8203;';
+  }
+
+  span(s, txt){
+    const t = esc(txt);
+    if (s === DEF_STYLE) return t;
+    if (s.cls) return `<span class="${s.cls}">${t}</span>`;
+    return `<span style="${s.css}">${t}</span>`;
+  }
+
+  /* поток данных — рендер батчами через rAF */
+  feed(text){
+    this.pending += text;
+    if (!this.raf) this.raf = requestAnimationFrame(() => this.flush());
+  }
+  flush(){
+    if (this.raf){ cancelAnimationFrame(this.raf); this.raf = 0; }
+    if (!this.pending) return;
+    const t = this.pending; this.pending = '';
+    this.write(t);
+    this.render();
+  }
+  touch(){ if (this.cur) this.cur.dirty = true; this.render(); }
+
+  toText(){
+    return this.lines.map(l => (l.ts ? l.ts + ' ' : '') + l.cells.map(c => c.c).join('').replace(/\s+$/,'')).join('\n');
+  }
+}
+
+function esc(s){
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function tstamp(){
+  const d = new Date();
+  const p = (n,w=2) => String(n).padStart(w,'0');
+  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(),3)}`;
+}
+
+/* ======================= Состояние порта ======================= */
+
+const term = new Term($('term'));
+let port = null, reader = null, writer = null, readDone = null;
+let keepReading = false, rxBytes = 0, txBytes = 0;
+let rawMode = false, echo = false, hexMode = false;
+let hexOffset = 0, hexRest = [];
+let rawLog = [];                 // сырые байты для сохранения
+let sigTimer = 0, spamTimer = 0;
+const decoder = new TextDecoder('utf-8', { fatal:false });
+
+function sys(msg, cls){
+  term.flush();                      // сначала отдаём накопленные данные порта
+  term.write('\r');
+  term.writeStyled('── ' + msg + '\n', cls || 'sys');
+  term.render();
+}
+
+function setStatus(text, state){
+  $('status').textContent = text;
+  const d = $('dot');
+  d.className = 'dot' + (state === 'on' ? ' on' : state === 'busy' ? ' busy' : '');
+}
+
+function connectedUI(on){
+  $('btnConnect').disabled = on;
+  $('btnDisconnect').disabled = !on;
+  $('btnSend').disabled = !on;
+  $('btnApply').disabled = !on;
+  $('btnBreak').disabled = !on;
+  $('btnDtr').disabled = !on;
+  $('btnRts').disabled = !on;
+  $('btnFile').disabled = !on;
+  $('ports').disabled = on;
+}
+
+function currentOptions(){
+  const b = $('baud').value;
+  return {
+    baudRate: b === 'custom' ? Math.max(1, parseInt($('baudCustom').value,10) || 115200) : parseInt(b,10),
+    dataBits: parseInt($('dataBits').value,10),
+    stopBits: parseInt($('stopBits').value,10),
+    parity: $('parity').value,
+    flowControl: $('flow').value,
+    bufferSize: 65536
+  };
+}
+
+function portLabel(p){
+  const i = p.getInfo ? p.getInfo() : {};
+  if (i.usbVendorId != null){
+    const vid = i.usbVendorId.toString(16).padStart(4,'0');
+    const pid = (i.usbProductId ?? 0).toString(16).padStart(4,'0');
+    return `${VENDORS[i.usbVendorId] || 'USB'} ${vid}:${pid}`;
+  }
+  return 'Последовательный порт';
+}
+const VENDORS = {
+  0x0403:'FTDI', 0x10c4:'Silicon Labs CP210x', 0x1a86:'CH340/CH9102', 0x067b:'Prolific',
+  0x2341:'Arduino', 0x303a:'Espressif', 0x2e8a:'Raspberry Pi', 0x18d1:'Google',
+  0x05c6:'Qualcomm', 0x1366:'SEGGER', 0x0525:'Linux gadget', 0x04e8:'Samsung', 0x22b8:'Motorola'
+};
+
+async function refreshPorts(){
+  const sel = $('ports');
+  const ports = await navigator.serial.getPorts();
+  sel.innerHTML = '';
+  const opt0 = document.createElement('option');
+  opt0.value = '';
+  opt0.textContent = ports.length ? '— выбрать разрешённый —' : '— нет разрешённых портов —';
+  sel.appendChild(opt0);
+  ports.forEach((p, i) => {
+    const o = document.createElement('option');
+    o.value = String(i);
+    o.textContent = portLabel(p);
+    sel.appendChild(o);
+  });
+  window._ports = ports;
+}
+
+async function openPort(p){
+  const opts = currentOptions();
+  await p.open(opts);
+  port = p;
+  rxBytes = txBytes = 0; hexOffset = 0; hexRest = []; rawLog = [];
+  writer = port.writable.getWriter();
+  keepReading = true;
+  readDone = readLoop();
+  await applySignals();
+  connectedUI(true);
+  setStatus(`${portLabel(p)} · ${opts.baudRate} ${opts.dataBits}${opts.parity[0].toUpperCase()}${opts.stopBits}`, 'on');
+  $('stPort').textContent = 'порт: ' + portLabel(p);
+  sys(`подключено, ${opts.baudRate} бод, ${opts.dataBits}${{none:'N',even:'E',odd:'O'}[opts.parity]}${opts.stopBits}` +
+      (opts.flowControl === 'hardware' ? ', RTS/CTS' : ''));
+  startSignalPoll();
+  $('term').focus();
+}
+
+async function connect(){
+  try{
+    let p = null;
+    const sel = $('ports').value;
+    if (sel !== '' && window._ports) p = window._ports[+sel];
+    if (!p) p = await navigator.serial.requestPort();
+    await openPort(p);
+    await refreshPorts();
+  }catch(e){
+    if (e && e.name === 'NotFoundError') return;      // пользователь закрыл диалог
+    sys('ошибка подключения: ' + (e && e.message || e), 'err');
+    setStatus('ошибка', '');
+  }
+}
+
+async function disconnect(quiet){
+  keepReading = false;
+  stopSignalPoll();
+  try{ if (reader) await reader.cancel(); }catch{}
+  try{ if (readDone) await readDone; }catch{}          // ждём полного выхода из readLoop
+  readDone = null;
+  try{ if (writer){ await writer.close().catch(()=>{}); writer.releaseLock(); } }catch{}
+  writer = null;
+  try{ if (port) await port.close(); }catch{}
+  port = null;
+  connectedUI(false);
+  setStatus('не подключено', '');
+  if (!quiet) sys('отключено');
+}
+
+async function readLoop(){
+  while (port && port.readable && keepReading){
+    reader = port.readable.getReader();
+    try{
+      while (true){
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (value && value.length) onData(value);
+      }
+    }catch(e){
+      if (keepReading) sys('ошибка чтения: ' + (e && e.message || e), 'err');
+    }finally{
+      try{ reader.releaseLock(); }catch{}
+      reader = null;
+    }
+    if (!keepReading) break;
+  }
+}
+
+function onData(bytes){
+  rxBytes += bytes.length;
+  $('stRx').textContent = 'RX: ' + human(rxBytes);
+  if (rawLog.length < 4000) rawLog.push(bytes);
+  if (hexMode) term.feed(hexdump(bytes));
+  else term.feed(decoder.decode(bytes, { stream:true }));
+}
+
+function hexdump(bytes){
+  const all = hexRest.concat(Array.from(bytes));
+  let out = '';
+  let i = 0;
+  for (; i + 16 <= all.length; i += 16){
+    out += dumpRow(all.slice(i, i+16));
+  }
+  hexRest = all.slice(i);
+  return out;
+}
+function dumpRow(row){
+  const off = hexOffset.toString(16).padStart(8,'0');
+  hexOffset += row.length;
+  const hex = row.map(b => b.toString(16).padStart(2,'0')).join(' ');
+  const asc = row.map(b => (b >= 32 && b < 127) ? String.fromCharCode(b) : '.').join('');
+  return `${off}  ${hex.padEnd(47)}  |${asc}|\n`;
+}
+
+function human(n){
+  if (n < 1024) return n + ' B';
+  if (n < 1048576) return (n/1024).toFixed(1) + ' KB';
+  return (n/1048576).toFixed(2) + ' MB';
+}
+
+/* ======================= Отправка ======================= */
+
+async function sendBytes(u8){
+  if (!writer){ sys('порт не подключён', 'err'); return; }
+  try{
+    await writer.write(u8);
+    txBytes += u8.length;
+    $('stTx').textContent = 'TX: ' + human(txBytes);
+  }catch(e){
+    sys('ошибка записи: ' + (e && e.message || e), 'err');
+  }
+}
+function sendText(s){ return sendBytes(new TextEncoder().encode(s)); }
+function sendByte(b){ return sendBytes(new Uint8Array([b])); }
+
+function eolStr(){
+  return { cr:'\r', lf:'\n', crlf:'\r\n', none:'' }[$('eol').value];
+}
+
+async function sendCommand(text, addEol, asHex){
+  const eol = addEol === false ? '' : eolStr();
+  if (echo){
+    term.flush();
+    term.write('\r');
+    term.writeStyled(text + '\n', 'tx');
+    term.render();
+  }
+  if (asHex === undefined ? $('hexSend').checked : asHex){
+    const bytes = parseHex(text);
+    if (!bytes){ sys('неверная hex-строка', 'err'); return; }
+    await sendBytes(bytes);
+  } else {
+    await sendText(text + eol);
+  }
+}
+
+function parseHex(s){
+  const cleaned = s.replace(/0x/gi,' ').replace(/[,\s]+/g,' ').trim();
+  if (!cleaned) return null;
+  const parts = cleaned.split(' ');
+  const out = [];
+  for (const p of parts){
+    if (!/^[0-9a-f]{1,2}$/i.test(p)) return null;
+    out.push(parseInt(p,16));
+  }
+  return new Uint8Array(out);
+}
+
+/* ======================= Клавиатура (интерактивный режим) ======================= */
+
+const CSI = '\x1b[';
+const KEYMAP = {
+  ArrowUp: CSI+'A', ArrowDown: CSI+'B', ArrowRight: CSI+'C', ArrowLeft: CSI+'D',
+  Home: CSI+'H', End: CSI+'F', PageUp: CSI+'5~', PageDown: CSI+'6~',
+  Delete: CSI+'3~', Insert: CSI+'2~', Escape: '\x1b', Tab: '\t',
+  F1:'\x1bOP', F2:'\x1bOQ', F3:'\x1bOR', F4:'\x1bOS',
+  F5:CSI+'15~', F6:CSI+'17~', F7:CSI+'18~', F8:CSI+'19~',
+  F9:CSI+'20~', F10:CSI+'21~', F11:CSI+'23~', F12:CSI+'24~'
+};
+
+$('term').addEventListener('keydown', async (e) => {
+  if (!rawMode || !port) return;
+
+  // копирование выделенного — Ctrl/Cmd+Shift+C
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'c') return;
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'v') return;
+  if (e.metaKey && !e.ctrlKey) return;                  // ⌘-сочетания оставляем браузеру
+
+  let out = null;
+
+  if (e.ctrlKey && !e.altKey){
+    const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    if (k >= 'a' && k <= 'z') out = String.fromCharCode(k.charCodeAt(0) - 96);
+    else if (k === ' ' || k === '@') out = '\x00';
+    else if (k === '[') out = '\x1b';
+    else if (k === '\\') out = '\x1c';
+    else if (k === ']') out = '\x1d';
+    else if (k === '^') out = '\x1e';
+    else if (k === '_' || k === '-' || k === '/') out = '\x1f';
+  }
+  if (out === null){
+    if (e.key === 'Enter') out = eolStr() || '\r';
+    else if (e.key === 'Backspace') out = String.fromCharCode(+$('bs').value);
+    else if (KEYMAP[e.key] !== undefined) out = KEYMAP[e.key];
+    else if (e.key.length === 1) out = (e.altKey ? '\x1b' : '') + e.key;
+  }
+  if (out === null) return;
+
+  e.preventDefault();
+  if (echo && out.length && out.charCodeAt(0) >= 32){ term.writeStyled(out, 'tx'); term.render(); }
+  await sendText(out);
+});
+
+$('term').addEventListener('paste', async (e) => {
+  if (!rawMode || !port) return;
+  e.preventDefault();
+  const t = (e.clipboardData || window.clipboardData).getData('text');
+  if (t) await sendText(t);
+});
+
+$('term').addEventListener('focus', () => term.touch());
+$('term').addEventListener('blur', () => term.touch());
+$('term').addEventListener('scroll', () => {
+  const el = $('term');
+  const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+  if (term.autoscroll !== atBottom && $('btnScroll').getAttribute('aria-pressed') === 'true'){
+    term.autoscroll = atBottom;                        // временно отключаем при ручной прокрутке
+  }
+});
+
+/* ======================= Сигнальные линии ======================= */
+
+async function applySignals(){
+  if (!port) return;
+  try{
+    await port.setSignals({
+      dataTerminalReady: $('btnDtr').getAttribute('aria-pressed') === 'true',
+      requestToSend: $('btnRts').getAttribute('aria-pressed') === 'true'
+    });
+  }catch{}
+}
+function startSignalPoll(){
+  stopSignalPoll();
+  sigTimer = setInterval(async () => {
+    if (!port) return;
+    try{
+      const s = await port.getSignals();
+      setSig('sCTS', s.clearToSend);
+      setSig('sDSR', s.dataSetReady);
+      setSig('sDCD', s.dataCarrierDetect);
+      setSig('sRI',  s.ringIndicator);
+    }catch{ stopSignalPoll(); }
+  }, 700);
+}
+function stopSignalPoll(){
+  if (sigTimer) clearInterval(sigTimer);
+  sigTimer = 0;
+  ['sCTS','sDSR','sDCD','sRI'].forEach(id => { const b = $(id); b.className=''; b.textContent='–'; });
+}
+function setSig(id, on){
+  const b = $(id);
+  b.className = on ? 'on' : '';
+  b.textContent = on ? '1' : '0';
+}
+
+/* ======================= UI-обвязка ======================= */
+
+function toggle(btn, fn, key){
+  btn.addEventListener('click', () => {
+    const v = btn.getAttribute('aria-pressed') !== 'true';
+    btn.setAttribute('aria-pressed', String(v));
+    if (key) store.set(key, v);
+    fn(v);
+  });
+  if (key){
+    const saved = store.get(key, null);
+    if (saved !== null && saved !== (btn.getAttribute('aria-pressed') === 'true')){
+      btn.setAttribute('aria-pressed', String(saved));
+    }
+    fn(btn.getAttribute('aria-pressed') === 'true');
+  }
+}
+
+$('btnConnect').onclick = connect;
+$('btnDisconnect').onclick = () => disconnect();
+$('btnApply').onclick = async () => {
+  const p = port;
+  if (!p) return;
+  setStatus('переоткрытие…', 'busy');
+  await disconnect(true);
+  try{ await openPort(p); }catch(e){ sys('не удалось переоткрыть: ' + e.message, 'err'); }
+};
+$('baud').onchange = () => {
+  const custom = $('baud').value === 'custom';
+  $('baudCustom').style.display = custom ? '' : 'none';
+  store.set('baud', $('baud').value);
+};
+$('baudCustom').onchange = () => store.set('baudCustom', $('baudCustom').value);
+['dataBits','parity','stopBits','flow','eol','bs'].forEach(id => {
+  $(id).onchange = () => store.set(id, $(id).value);
+  const v = store.get(id, null);
+  if (v !== null) $(id).value = v;
+});
+(() => {
+  const b = store.get('baud', null);
+  if (b !== null){ $('baud').value = b; $('baud').onchange(); }
+  const bc = store.get('baudCustom', null);
+  if (bc !== null) $('baudCustom').value = bc;
+})();
+
+toggle($('btnRaw'), v => { rawMode = v; $('term').classList.toggle('raw', v); if (v) $('term').focus(); term.touch(); }, 'raw');
+toggle($('btnEcho'), v => echo = v, 'echo');
+toggle($('btnTs'), v => term.timestamps = v, 'ts');
+toggle($('btnHex'), v => { hexMode = v; hexRest = []; }, null);
+toggle($('btnScroll'), v => { term.autoscroll = v; if (v) $('term').scrollTop = $('term').scrollHeight; }, 'autoscroll');
+toggle($('btnWrap'), v => { $('term').style.whiteSpace = v ? 'pre-wrap' : 'pre'; $('term').style.wordBreak = v ? 'break-all' : 'normal'; }, 'wrap');
+toggle($('btnSide'), v => $('side').classList.toggle('hidden', !v), 'side');
+toggle($('btnDtr'), () => applySignals(), 'dtr');
+toggle($('btnRts'), () => applySignals(), 'rts');
+
+$('btnBreak').onclick = async () => {
+  try{
+    await port.setSignals({ break:true });
+    sys('BREAK…');
+    setTimeout(async () => { try{ await port.setSignals({ break:false }); }catch{} }, 250);
+  }catch(e){ sys('BREAK не поддерживается: ' + e.message, 'err'); }
+};
+
+$('btnClear').onclick = () => { term.clear(); hexOffset = 0; hexRest = []; };
+$('btnSave').onclick = () => {
+  const blob = new Blob([term.toText()], { type:'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `serial-${new Date().toISOString().replace(/[:.]/g,'-').slice(0,19)}.log`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+};
+
+$('maxLines').onchange = () => {
+  term.maxLines = Math.max(200, parseInt($('maxLines').value,10) || 8000);
+  store.set('maxLines', term.maxLines);
+  term.trim();
+};
+$('maxLines').value = term.maxLines;
+
+let fontSize = store.get('font', 12.5);
+function applyFont(){ $('term').style.fontSize = fontSize + 'px'; store.set('font', fontSize); }
+$('fontUp').onclick = () => { fontSize = Math.min(24, fontSize + 1); applyFont(); };
+$('fontDn').onclick = () => { fontSize = Math.max(9, fontSize - 1); applyFont(); };
+applyFont();
+
+/* --- быстрые клавиши в панели --- */
+document.querySelectorAll('.keys button[data-b]').forEach(b => {
+  b.onclick = () => sendByte(+b.dataset.b);
+});
+document.querySelectorAll('.keys button[data-s]').forEach(b => {
+  b.onclick = () => sendText(b.dataset.s);
+});
+document.querySelector('.keys button[data-enter]').onclick = () => sendText(eolStr() || '\r');
+
+$('btnSpam').onclick = () => {
+  if (spamTimer){ clearInterval(spamTimer); spamTimer = 0; $('btnSpam').textContent = 'Спамить 3 сек'; return; }
+  const code = +$('spamKey').value;
+  const until = Date.now() + 3000;
+  $('btnSpam').textContent = 'Стоп';
+  spamTimer = setInterval(() => {
+    if (Date.now() > until || !port){
+      clearInterval(spamTimer); spamTimer = 0; $('btnSpam').textContent = 'Спамить 3 сек'; return;
+    }
+    sendByte(code);
+  }, 25);
+};
+
+/* --- командная строка + история --- */
+let history = store.get('history', []);
+let histIdx = history.length;
+
+$('cmd').addEventListener('keydown', async (e) => {
+  if (e.key === 'Enter'){
+    const v = $('cmd').value;
+    if (!v && !e.ctrlKey) { await sendText(eolStr() || '\r'); return; }
+    await sendCommand(v, !e.ctrlKey);
+    if (v && history[history.length-1] !== v){
+      history.push(v);
+      if (history.length > 200) history.shift();
+      store.set('history', history);
+    }
+    histIdx = history.length;
+    $('cmd').value = '';
+    e.preventDefault();
+  } else if (e.key === 'ArrowUp'){
+    if (histIdx > 0){ histIdx--; $('cmd').value = history[histIdx] || ''; }
+    e.preventDefault();
+  } else if (e.key === 'ArrowDown'){
+    if (histIdx < history.length){ histIdx++; $('cmd').value = history[histIdx] || ''; }
+    e.preventDefault();
+  } else if (e.ctrlKey && e.key.toLowerCase() === 'c'){
+    if (!$('cmd').value){ await sendByte(3); e.preventDefault(); }
+  }
+});
+$('btnSend').onclick = async () => {
+  const v = $('cmd').value;
+  await sendCommand(v);
+  if (v){ history.push(v); store.set('history', history); histIdx = history.length; $('cmd').value = ''; }
+};
+
+/* --- макросы --- */
+let macros = store.get('macros', [
+  { name:'reboot bootloader', cmd:'reboot bootloader', eol:true },
+  { name:'getprop ro.build', cmd:'getprop | grep ro.build', eol:true },
+  { name:'dmesg | tail', cmd:'dmesg | tail -50', eol:true }
+]);
+
+function renderMacros(){
+  const box = $('macros');
+  box.innerHTML = '';
+  macros.forEach((m, i) => {
+    const row = document.createElement('div');
+    row.className = 'macro';
+    const b = document.createElement('button');
+    b.className = 'm';
+    b.textContent = (i < 9 ? `${i+1}. ` : '') + m.name;
+    b.title = m.cmd;
+    b.onclick = () => sendCommand(m.cmd, m.eol, false);
+    const x = document.createElement('button');
+    x.className = 'x';
+    x.textContent = '×';
+    x.title = 'удалить';
+    x.onclick = () => { macros.splice(i,1); store.set('macros', macros); renderMacros(); };
+    row.append(b, x);
+    box.appendChild(row);
+  });
+}
+renderMacros();
+
+$('btnAddMacro').onclick = () => {
+  $('mName').value = ''; $('mCmd').value = ''; $('mEol').checked = true;
+  $('dlgMacro').showModal();
+};
+$('dlgMacro').addEventListener('close', () => {
+  if ($('dlgMacro').returnValue !== 'ok') return;
+  const cmd = $('mCmd').value;
+  if (!cmd) return;
+  macros.push({ name: $('mName').value || cmd, cmd, eol: $('mEol').checked });
+  store.set('macros', macros);
+  renderMacros();
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.altKey && !e.ctrlKey && !e.metaKey && /^[1-9]$/.test(e.key)){
+    const m = macros[+e.key - 1];
+    if (m){ sendCommand(m.cmd, m.eol, false); e.preventDefault(); }
+  }
+});
+
+/* --- отправка файла построчно --- */
+let pendingFile = null;
+$('btnFile').onclick = () => $('fileInput').click();
+$('fileInput').onchange = async () => {
+  const f = $('fileInput').files[0];
+  if (!f) return;
+  pendingFile = await f.text();
+  $('fName').textContent = `${f.name} — ${pendingFile.split('\n').length} строк, ${human(f.size)}`;
+  $('dlgFile').showModal();
+  $('fileInput').value = '';
+};
+$('dlgFile').addEventListener('close', async () => {
+  if ($('dlgFile').returnValue !== 'ok' || !pendingFile) return;
+  const delay = Math.max(0, parseInt($('fDelay').value,10) || 0);
+  const lines = pendingFile.split(/\r?\n/);
+  pendingFile = null;
+  sys(`отправка ${lines.length} строк…`);
+  for (const l of lines){
+    if (!port) break;
+    await sendText(l + (eolStr() || '\r'));
+    if (delay) await new Promise(r => setTimeout(r, delay));
+  }
+  sys('отправка завершена');
+});
+
+/* --- события устройства --- */
+navigator.serial.addEventListener('disconnect', async (e) => {
+  if (port && e.target === port){
+    sys('устройство отключено физически', 'err');
+    await disconnect(true);
+  }
+  refreshPorts();
+});
+navigator.serial.addEventListener('connect', () => {
+  refreshPorts();
+  sys('обнаружено новое устройство');
+});
+
+window.addEventListener('beforeunload', () => { keepReading = false; try{ port && port.close(); }catch{} });
+
+/* --- глобальные хоткеи --- */
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k' && !rawMode){ term.clear(); e.preventDefault(); }
+});
+
+refreshPorts();
+sys('Web Serial Console готова. Нажми «Подключить» и выбери порт.');
+sys('Для интерактивной консоли включи «⌨ Интерактивно» и кликни по окну терминала.');
+</script>
 </body>
 </html>
